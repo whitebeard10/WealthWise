@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -12,9 +13,9 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { SidebarNav } from './SidebarNav';
-import { Button } from '@/components/ui/button';
-import { Leaf, UserCircle } from 'lucide-react';
+import { Leaf } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -22,6 +23,29 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const { currentUser, loading } = useAuth();
+
+  // Do not render layout if auth is loading and no user, to prevent flash of unauth state
+  // However, login/signup pages should render immediately.
+  // This logic might need refinement based on specific public/private page handling.
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isAuthPage = path === '/login' || path === '/signup';
+
+  if (loading && !currentUser && !isAuthPage) {
+     // You might want a global loading spinner here, or handle it in individual pages.
+     // For now, returning null or a minimal loader can prevent layout flash.
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        {/* Minimal loader to avoid full layout flash */}
+      </div>
+    );
+  }
+
+
+  // If there's no current user and we are not on an auth page,
+  // SidebarNav will render Login/Signup.
+  // If on an auth page, children will render the auth form.
+  // The Sidebar and header are still rendered for auth pages for consistency.
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -35,11 +59,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <SidebarContent>
           <SidebarNav />
         </SidebarContent>
+        {/* Footer can be used for other things, or removed if profile button is fully handled by SidebarNav */}
         <SidebarFooter className="p-4 mt-auto">
-           <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center">
-            <UserCircle className="h-5 w-5" />
-            <span className="group-data-[collapsible=icon]:hidden ml-2">Profile</span>
-          </Button>
+          {/* Example: Theme switcher or other global actions could go here */}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
