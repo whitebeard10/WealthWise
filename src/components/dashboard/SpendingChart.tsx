@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const chartConfig = {
   amount: {
-    label: "Amount ($)",
+    label: "Amount (₹)",
     color: "hsl(var(--primary))",
   },
 } satisfies Record<string, any>;
@@ -89,7 +89,7 @@ export function SpendingChart() {
                 cursor={false}
                 content={<ChartTooltipContent hideLabel />}
               />
-              <Bar dataKey="amount" fill="var(--color-amount)" radius={8} />
+              <Bar dataKey="amount" fill="var(--color-amount)" radius={8} animationBegin={800} animationDuration={800} />
             </BarChart>
           </ResponsiveContainer>
         </ChartContainer>

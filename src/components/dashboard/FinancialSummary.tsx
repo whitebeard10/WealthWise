@@ -11,11 +11,16 @@ interface SummaryCardProps {
   value: number;
   icon: React.ElementType;
   isLoading: boolean;
+  delay?: number; // Add a delay prop for staggered animation
 }
 
-function SummaryCard({ title, value, icon: Icon, isLoading }: SummaryCardProps) {
+function SummaryCard({ title, value, icon: Icon, isLoading, delay = 0 }: SummaryCardProps) {
+  // Add a CSS class for the fade-in animation
   return (
-    <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <Card
+      className="shadow-lg hover:shadow-xl transition-shadow duration-300 fade-in-card"
+      style={{ animationDelay: `${delay}ms` }} // Apply the staggered delay
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className="h-5 w-5 text-accent" />
@@ -26,7 +31,7 @@ function SummaryCard({ title, value, icon: Icon, isLoading }: SummaryCardProps) 
         ) : (
           <div className="text-2xl font-bold">
             ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
+ </div>
         )}
       </CardContent>
     </Card>
@@ -53,10 +58,28 @@ export function FinancialSummary() {
   }, [transactions]);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
-      <SummaryCard title="Total Income" value={summaryData.totalIncome} icon={TrendingDown} isLoading={loading} />
-      <SummaryCard title="Total Expenses" value={summaryData.totalExpenses} icon={TrendingUp} isLoading={loading} />
-      <SummaryCard title="Net Balance" value={summaryData.netBalance} icon={Scale} isLoading={loading} />
-    </div>
+    // Add the CSS for the fade-in animation
+    <>
+      <style jsx global>{`
+        .fade-in-card {
+          opacity: 0;
+          animation: fadeIn 0.5s ease-in-out forwards;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+      `}</style>
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard title="Total Income" value={summaryData.totalIncome} icon={TrendingDown} isLoading={loading} delay={0} />
+        <SummaryCard title="Total Expenses" value={summaryData.totalExpenses} icon={TrendingUp} isLoading={loading} delay={100} />
+        <SummaryCard title="Net Balance" value={summaryData.netBalance} icon={Scale} isLoading={loading} delay={200} />
+      </div>
+    </>
   );
 }
