@@ -1,8 +1,10 @@
+
 'use client';
 
 import { FinancialSummary } from '@/components/dashboard/FinancialSummary';
 import { SpendingChart } from '@/components/dashboard/SpendingChart';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { RecentTransactions } from '@/components/dashboard/RecentTransactions'; // Import new component
 import { Separator } from '@/components/ui/separator';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -26,6 +28,8 @@ export default function DashboardPage() {
       <FinancialSummary />
       <Separator />
       <SpendingChart />
+      <Separator /> 
+      <RecentTransactions /> 
       <Separator />
       <QuickActions />
     </div>
