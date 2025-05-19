@@ -15,19 +15,19 @@ import type { Transaction } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { PlusCircle, ListChecks } from 'lucide-react';
 
 export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
   const { transactions, loading } = useTransactions();
 
-  // Transactions are already sorted by date desc in TransactionContext
   const recentTransactions = transactions.slice(0, maxItems);
 
   const formatDateString = (dateStr: string) => {
     try {
-      // Assuming dateStr is in 'yyyy-MM-dd' format
       return format(parseISO(dateStr), 'MMM dd, yyyy');
     } catch (e) {
-      // Fallback if parsing fails, though dates from Firestore should be valid ISO strings or Timestamps
       console.warn("Failed to parse date for formatting:", dateStr, e);
       return dateStr; 
     }
@@ -36,11 +36,17 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <div>
-          <CardTitle>Recent Transactions</CardTitle>
-          <CardDescription>
-            Your last {loading || recentTransactions.length === 0 ? maxItems : recentTransactions.length} recorded transactions.
-          </CardDescription>
+        <div className="flex items-center justify-between">
+            <div>
+                <CardTitle className="flex items-center gap-2">
+                    <ListChecks className="h-6 w-6 text-primary"/>
+                    Recent Transactions
+                </CardTitle>
+                <CardDescription>
+                    Your last {loading || recentTransactions.length === 0 ? maxItems : recentTransactions.length} recorded transactions.
+                </CardDescription>
+            </div>
+            {/* Optional: Could add a "View All" button here if you create a full transactions page */}
         </div>
       </CardHeader>
       <CardContent>
@@ -58,7 +64,16 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
           </div>
         )}
         {!loading && recentTransactions.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-10">No transactions recorded yet.</p>
+          <div className="text-center py-10 space-y-3">
+            <p className="text-lg text-muted-foreground">No transactions recorded yet.</p>
+            <p className="text-sm text-muted-foreground">Let's get started by adding your first one!</p>
+            <Button asChild variant="default" className="mt-2">
+              <Link href="/transactions/add">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Transaction
+              </Link>
+            </Button>
+          </div>
         )}
         {!loading && recentTransactions.length > 0 && (
           <div className="overflow-x-auto">

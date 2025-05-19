@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Loading from '@/app/loading';
 import { format } from 'date-fns';
-import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint } from 'lucide-react';
+import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 export default function ProfilePage() {
   const { currentUser, loading: authLoading, logOut } = useAuth();
@@ -32,42 +33,53 @@ export default function ProfilePage() {
   
   const totalTransactions = transactions.length;
 
+  // Placeholder for edit profile functionality
+  const handleEditProfile = () => {
+    // In a real app, this would navigate to an edit profile page or open a modal
+    alert("Edit profile functionality coming soon!");
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Profile</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Profile Overview</h1>
         <Button onClick={logOut} variant="outline" size="sm" className="shadow-sm hover:shadow-md transition-shadow">
           <LogOut className="mr-2 h-4 w-4" />
           Log Out
         </Button>
       </div>
+      <Separator />
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2"> {/* Adjusted grid for better responsiveness */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 mt-6">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xl">
               <User className="h-6 w-6 text-primary" />
               Account Information
             </CardTitle>
-            <CardDescription>Your personal and account details.</CardDescription>
+            <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-muted-foreground hover:text-primary">
+              <Edit3 className="h-5 w-5" />
+              <span className="sr-only">Edit Profile</span>
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-4 pt-2"> {/* Added pt-2 for better spacing */}
-            <div className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-              <Mail className="h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
+          <CardDescription className="px-6 pb-2">Your personal and account details.</CardDescription>
+          <CardContent className="space-y-3 pt-2">
+            <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
+              <Mail className="h-5 w-5 text-muted-foreground flex-shrink-0" />
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Email</p>
-                <p className="text-md font-semibold">{currentUser.email}</p>
+                <p className="text-sm font-semibold">{currentUser.email}</p>
               </div>
             </div>
-            <div className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-              <CalendarDays className="h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
+            <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
+              <CalendarDays className="h-5 w-5 text-muted-foreground flex-shrink-0" />
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Member Since</p>
-                <p className="text-md font-semibold">{memberSince}</p>
+                <p className="text-sm font-semibold">{memberSince}</p>
               </div>
             </div>
-             <div className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-              <Fingerprint className="h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
+             <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
+              <Fingerprint className="h-5 w-5 text-muted-foreground flex-shrink-0" />
               <div>
                 <p className="text-xs font-medium text-muted-foreground">User ID</p>
                 <p className="text-xs text-foreground break-all">{currentUser.uid}</p>
@@ -76,26 +88,38 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-xl">
               <ListChecks className="h-6 w-6 text-primary" />
               Activity Summary
             </CardTitle>
             <CardDescription>A quick look at your app usage.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 pt-2"> {/* Added pt-2 */}
-            <div className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-              <ListChecks className="h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
+          <CardContent className="space-y-3 pt-2">
+            <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
+              <ListChecks className="h-5 w-5 text-muted-foreground flex-shrink-0" />
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Total Transactions Logged</p>
-                <p className="text-md font-semibold">{totalTransactions}</p>
+                <p className="text-sm font-semibold">{totalTransactions}</p>
               </div>
             </div>
-            {/* You can add more summary items here in the future */}
+            {/* You can add more summary items here in the future, e.g., average transaction amount, most common category */}
+            <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors opacity-50 cursor-not-allowed">
+                <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div>
+                    <p className="text-xs font-medium text-muted-foreground">AI Forecasts Generated</p>
+                    <p className="text-sm font-semibold">0 (Feature coming soon!)</p>
+                </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+      {/* Future enhancements could include:
+          - Change password functionality
+          - Delete account option
+          - Theme preferences
+      */}
     </div>
   );
 }

@@ -4,7 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTransactions } from "@/contexts/TransactionContext";
 import type { FinancialSummaryData } from "@/lib/types";
-import { TrendingUp, TrendingDown, Scale } from "lucide-react"; // Corrected icons
+import { TrendingUp, TrendingDown, Scale } from "lucide-react";
 import React, { useMemo } from "react";
 
 interface SummaryCardProps {
@@ -12,14 +12,17 @@ interface SummaryCardProps {
   value: number;
   icon: React.ElementType;
   isLoading: boolean;
-  delay?: number; 
+  delay?: number;
+  isNetBalance?: boolean;
 }
 
-function SummaryCard({ title, value, icon: Icon, isLoading, delay = 0 }: SummaryCardProps) {
+function SummaryCard({ title, value, icon: Icon, isLoading, delay = 0, isNetBalance = false }: SummaryCardProps) {
+  const valueColorClass = isNetBalance ? (value >= 0 ? 'text-primary' : 'text-destructive') : 'text-foreground';
+
   return (
     <Card
       className="shadow-lg hover:shadow-xl transition-shadow duration-300 fade-in-card"
-      style={{ animationDelay: `${delay}ms` }} 
+      style={{ animationDelay: `${delay}ms` }}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
@@ -29,7 +32,7 @@ function SummaryCard({ title, value, icon: Icon, isLoading, delay = 0 }: Summary
         {isLoading ? (
           <div className="h-8 w-3/4 bg-muted animate-pulse rounded-md"></div>
         ) : (
-          <div className="text-2xl font-bold">
+          <div className={`text-2xl font-bold ${valueColorClass}`}>
             ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         )}
@@ -74,10 +77,10 @@ export function FinancialSummary() {
           }
         }
       `}</style>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"> {/* Adjusted grid for better responsiveness */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <SummaryCard title="Total Income" value={summaryData.totalIncome} icon={TrendingUp} isLoading={loading} delay={0} />
         <SummaryCard title="Total Expenses" value={summaryData.totalExpenses} icon={TrendingDown} isLoading={loading} delay={100} />
-        <SummaryCard title="Net Balance" value={summaryData.netBalance} icon={Scale} isLoading={loading} delay={200} />
+        <SummaryCard title="Net Balance" value={summaryData.netBalance} icon={Scale} isLoading={loading} delay={200} isNetBalance={true} />
       </div>
     </>
   );
