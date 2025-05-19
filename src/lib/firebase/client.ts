@@ -16,12 +16,19 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_APP_ID',
 ];
 
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+let app: FirebaseApp;
+let auth: Auth;
 
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `Firebase configuration error: Missing environment variables: ${missingEnvVars.join(', ')}. Please check your .env.local file and ensure all NEXT_PUBLIC_FIREBASE_ variables are set correctly.`
-  );
+// Only run the environment variable check if no apps are initialized yet.
+// This helps prevent errors if the module is evaluated multiple times client-side
+// and process.env isn't consistently populated in every instance.
+if (!getApps().length) {
+  const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+  if (missingEnvVars.length > 0) {
+    throw new Error(
+      `Firebase configuration error: Missing environment variables: ${missingEnvVars.join(', ')}. Please check your Firebase Studio environment variable settings and ensure all NEXT_PUBLIC_FIREBASE_ variables are set correctly.`
+    );
+  }
 }
 
 const firebaseConfig = {
@@ -33,15 +40,20 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-let app: FirebaseApp;
-let auth: Auth;
 
 if (!getApps().length) {
   try {
     app = initializeApp(firebaseConfig);
   } catch (error) {
     console.error("Firebase initialization error:", error);
-    throw new Error(`Firebase initialization failed. Original error: ${error instanceof Error ? error.message : String(error)}. Check your Firebase config values.`);
+    // Log the config that was attempted
+    console.error("Attempted Firebase config:", firebaseConfig);
+    // If any required var is still undefined here, it's a critical issue.
+    const stillMissing = requiredEnvVars.filter(envVar => !process.env[envVar]);
+    if (stillMissing.length > 0) {
+        throw new Error(`Firebase initialization failed due to UNRESOLVED missing env vars: ${stillMissing.join(', ')}. This should not happen if the initial check passed.`)
+    }
+    throw new Error(`Firebase initialization failed. Original error: ${error instanceof Error ? error.message : String(error)}. Check your Firebase config values in Firebase Studio environment settings.`);
   }
 } else {
   app = getApp();
