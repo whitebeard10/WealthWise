@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -85,11 +86,16 @@ export function TransactionForm() {
   };
   
   const onSubmit = (data: TransactionFormData) => {
+    // The addTransaction function in context now expects a Date object or a full ISO string for 'date'
+    // It will handle formatting to 'yyyy-MM-dd' before saving.
     addTransaction({
-      ...data,
-      date: format(data.date, 'yyyy-MM-dd'), // Store date as string
+      description: data.description,
+      amount: data.amount,
+      type: data.type,
+      date: data.date, // Pass the Date object directly
+      category: data.category,
     });
-    toast({ title: "Success!", description: "Transaction added successfully.", variant: "default" });
+    // Toast is now handled within addTransaction context function
     form.reset();
     setSuggestedCategory(null);
   };
@@ -191,7 +197,7 @@ export function TransactionForm() {
                   </SelectTrigger>
                   <SelectContent>
                     {availableCategories.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      <SelectItem key={cat} value={cat}>{cat}>{cat}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -214,3 +220,5 @@ export function TransactionForm() {
     </Card>
   );
 }
+
+    
