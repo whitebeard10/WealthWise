@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Loading from '@/app/loading';
 import { format } from 'date-fns';
-import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3 } from 'lucide-react';
+import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3, TrendingUp } from 'lucide-react'; // Added TrendingUp
 import { Separator } from '@/components/ui/separator';
 
 export default function ProfilePage() {
@@ -27,10 +27,10 @@ export default function ProfilePage() {
     return <Loading />;
   }
 
-  const memberSince = currentUser.metadata.creationTime 
+  const memberSince = currentUser.metadata.creationTime
     ? format(new Date(currentUser.metadata.creationTime), 'MMMM dd, yyyy')
     : 'N/A';
-  
+
   const totalTransactions = transactions.length;
 
   // Placeholder for edit profile functionality
