@@ -2,6 +2,7 @@
 // src/lib/firebase/client.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore'; // Import Firestore
 
 // --- Temporary Debugging Line ---
 console.log('CLIENT.TS: Initial process.env.NEXT_PUBLIC_FIREBASE_API_KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
@@ -31,6 +32,7 @@ const requiredEnvVarKeys = Object.keys(capturedEnvVars);
 
 let app: FirebaseApp;
 let auth: Auth;
+let db: Firestore; // Firestore instance
 
 // Only run the environment variable check and initialization if no apps are initialized yet.
 if (!getApps().length) {
@@ -40,7 +42,7 @@ if (!getApps().length) {
 
   if (missingEnvVarNames.length > 0) {
     throw new Error(
-      `Firebase configuration error: Missing environment variable values for: ${missingEnvVarNames.join(', ')}. Please check your Firebase Studio environment variable settings and ensure all NEXT_PUBLIC_FIREBASE_ variables are set correctly and populated.`
+      `Firebase configuration error: Missing environment variable values for: ${missingEnvVarNames.join(', ')}. Please check your Firebase Studio environment variable settings and ensure all NEXT_PUBLIC_FIREBASE_ variables are set correctly.`
     );
   }
 
@@ -80,11 +82,11 @@ if (!getApps().length) {
 
 try {
   auth = getAuth(app);
+  db = getFirestore(app); // Initialize Firestore
 } catch (error) {
-    console.error("CLIENT.TS: Firebase getAuth error:", error);
-    // It's possible 'app' might not be initialized if the above block had issues and didn't throw an error that halted execution.
+    console.error("CLIENT.TS: Firebase getAuth/getFirestore error:", error);
     const appName = app && app.name ? app.name : "undefined_app";
-    throw new Error(`Firebase getAuth failed for app "${appName}". Original error: ${error instanceof Error ? error.message : String(error)}. This usually indicates an issue with the app initialization or configuration.`);
+    throw new Error(`Firebase getAuth or getFirestore failed for app "${appName}". Original error: ${error instanceof Error ? error.message : String(error)}. This usually indicates an issue with the app initialization or configuration.`);
 }
 
-export { app, auth };
+export { app, auth, db }; // Export db

@@ -1,10 +1,12 @@
+
 export interface Transaction {
-  id: string;
+  id: string; // Firestore document ID
   description: string;
   amount: number;
   type: 'income' | 'expense';
   date: string; // ISO string format (e.g., "2023-10-26")
   category: string;
+  userId?: string; // To associate with the authenticated user
 }
 
 export interface FinancialSummaryData {
