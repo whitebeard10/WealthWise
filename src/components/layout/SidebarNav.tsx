@@ -8,44 +8,32 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, PlusCircle, TrendingUp, Settings, UserCircle, LogIn, UserPlus, LogOut } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, TrendingUp, UserCircle, LogOut } from 'lucide-react'; // Removed LogIn, UserPlus
 import { useAuth } from '@/contexts/AuthContext';
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { currentUser, logOut, loading } = useAuth();
+  const { currentUser, logOut, loading: authLoading } = useAuth();
 
-  const commonNavItems = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard, requiresAuth: false },
-  ];
-
+  // Nav items are now only for authenticated users.
+  // The "Dashboard" link is common but will only be shown when SidebarNav is rendered (i.e., user is logged in).
   const authenticatedNavItems = [
-    ...commonNavItems,
-    { href: '/transactions/add', label: 'Add Transaction', icon: PlusCircle, requiresAuth: true },
-    { href: '/forecast', label: 'AI Forecast', icon: TrendingUp, requiresAuth: true },
-    { href: '/profile', label: 'Profile', icon: UserCircle, requiresAuth: true },
-    // { href: '/settings', label: 'Settings', icon: Settings, requiresAuth: true },
-  ];
-
-  const unauthenticatedNavItems = [
-    ...commonNavItems,
-    { href: '/login', label: 'Login', icon: LogIn, requiresAuth: false },
-    { href: '/signup', label: 'Sign Up', icon: UserPlus, requiresAuth: false },
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/transactions/add', label: 'Add Transaction', icon: PlusCircle },
+    { href: '/forecast', label: 'AI Forecast', icon: TrendingUp },
+    { href: '/profile', label: 'Profile', icon: UserCircle },
+    // { href: '/settings', label: 'Settings', icon: Settings }, // Example for future
   ];
   
-  let navItems = [];
-  if (loading) { // Don't render nav items if auth state is loading, or render skeleton
-      navItems = [];
-  } else if (currentUser) {
-      navItems = authenticatedNavItems;
-  } else {
-      navItems = unauthenticatedNavItems;
+  // If auth is loading, or no user, this component might not be rendered due to AppLayout changes,
+  // but if it were, we'd show nothing or a skeleton. For simplicity, return null if no user.
+  if (authLoading || !currentUser) { 
+      return null; 
   }
-
 
   return (
     <SidebarMenu>
-      {navItems.map((item) => (
+      {authenticatedNavItems.map((item) => (
         <SidebarMenuItem key={item.href}>
           <Link href={item.href} passHref legacyBehavior>
             <SidebarMenuButton
@@ -62,18 +50,17 @@ export function SidebarNav() {
           </Link>
         </SidebarMenuItem>
       ))}
-      {currentUser && !loading && (
-        <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={async () => { await logOut(); }}
-              tooltip={{ children: "Logout", className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
-              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <LogOut />
-              <span>Logout</span>
-            </SidebarMenuButton>
-        </SidebarMenuItem>
-      )}
+      {/* Logout button remains for authenticated users */}
+      <SidebarMenuItem>
+          <SidebarMenuButton
+            onClick={async () => { await logOut(); }}
+            tooltip={{ children: "Logout", className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
+            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <LogOut />
+            <span>Logout</span>
+          </SidebarMenuButton>
+      </SidebarMenuItem>
     </SidebarMenu>
   );
 }
