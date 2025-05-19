@@ -3,6 +3,10 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 
+// --- Temporary Debugging Line ---
+console.log('NEXT_PUBLIC_FIREBASE_API_KEY as seen by client.ts:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+// --- End Temporary Debugging Line ---
+
 const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
