@@ -3,7 +3,7 @@
 
 import type { Transaction } from '@/lib/types';
 import type { ReactNode } from 'react';
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase/client';
 import {
@@ -25,12 +25,10 @@ import { format, parseISO, isValid, isSameDay, startOfToday, addDays, addWeeks, 
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 
-// Define a more specific type for data passed to add/update functions
 type TransactionInputData = Omit<Transaction, 'id' | 'userId' | 'date' | 'recurrenceEndDate'> & {
   date: Date | string;
-  recurrenceEndDate?: Date | string | null; // Allow Date, string, or null
+  recurrenceEndDate?: Date | string | null;
 };
-
 
 interface TransactionContextType {
   transactions: Transaction[];
@@ -51,8 +49,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-  const [processedRecurringTemplates, setProcessedRecurringTemplates] = useState<Set<string>>(new Set());
-
+  const processingRecurringRef = useRef(false);
 
   const internalAddTransaction = useCallback(async (transactionData: TransactionInputData): Promise<string | null> => {
     if (!currentUser) return null;
@@ -62,11 +59,9 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       return docRef.id;
     } catch (err: any) {
       console.error("[TransactionContext] Error adding transaction internally:", err);
-      // Avoid setting global error or showing toast for internal adds
       return null;
     }
   }, [currentUser]);
-
 
   const checkAndLogRecurringTransactions = useCallback(async (allTransactions: Transaction[]) => {
     if (!currentUser) return;
@@ -84,7 +79,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const today = startOfToday();
 
     for (const template of recurringTemplates) {
-      if (!template.id) continue; // Should not happen with Firestore data
+      if (!template.id) {
+        console.warn("[TransactionContext] Template found without ID, skipping:", template);
+        continue;
+      }
       console.log(`[TransactionContext] Processing template ID: ${template.id}, Description: ${template.description}`);
 
       let originalTransactionDate: Date;
@@ -100,7 +98,6 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       }
       console.log(`[TransactionContext] Template ${template.id} - Original Date: ${format(originalTransactionDate, 'yyyy-MM-dd')}`);
 
-
       let endDate: Date | null = null;
       if (template.recurrenceEndDate) {
         try {
@@ -109,7 +106,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             console.warn(`[TransactionContext] Template ${template.id} has invalid recurrenceEndDate: ${template.recurrenceEndDate}. Treating as no end date.`);
             endDate = null;
           } else {
-             console.log(`[TransactionContext] Template ${template.id} - Recurrence End Date: ${format(endDate, 'yyyy-MM-dd')}`);
+            console.log(`[TransactionContext] Template ${template.id} - Recurrence End Date: ${format(endDate, 'yyyy-MM-dd')}`);
           }
         } catch (e) {
           console.warn(`[TransactionContext] Error parsing recurrenceEndDate for template ${template.id}: ${template.recurrenceEndDate}. Treating as no end date. Error: ${e}`);
@@ -121,23 +118,30 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       console.log(`[TransactionContext] Template ${template.id} - Today (for comparison): ${format(today, 'yyyy-MM-dd')}`);
       console.log(`[TransactionContext] Template ${template.id} - Initial currentRecurrenceDate: ${format(currentRecurrenceDate, 'yyyy-MM-dd')}`);
 
+      let safetyCounter = 0; // Safety break for while loop
+      const MAX_ITERATIONS_PER_TEMPLATE = 1000; // Avoid excessively long loops
 
-      // Loop to generate instances up to 'today'
-      while (isBefore(currentRecurrenceDate, today) || isEqual(currentRecurrenceDate, today)) {
-        console.log(`[TransactionContext] Template ${template.id} - Considering date: ${format(currentRecurrenceDate, 'yyyy-MM-dd')}`);
-        if (endDate && isBefore(endDate, currentRecurrenceDate)) {
-          console.log(`[TransactionContext] Template ${template.id} - Current recurrence date ${format(currentRecurrenceDate, 'yyyy-MM-dd')} is after end date ${format(endDate, 'yyyy-MM-dd')}. Stopping for this template.`);
-          break; // Past the end date for this template
+      while ((isBefore(currentRecurrenceDate, today) || isEqual(currentRecurrenceDate, today)) && safetyCounter < MAX_ITERATIONS_PER_TEMPLATE) {
+        safetyCounter++;
+        console.log(`[TransactionContext] Template ${template.id} - Iteration ${safetyCounter} - Considering date: ${format(currentRecurrenceDate, 'yyyy-MM-dd')}`);
+        if (endDate && isBefore(currentRecurrenceDate, originalTransactionDate) && isBefore(endDate, currentRecurrenceDate)) {
+             console.log(`[TransactionContext] Template ${template.id} - Current recurrence date ${format(currentRecurrenceDate, 'yyyy-MM-dd')} is after end date ${format(endDate, 'yyyy-MM-dd')}. Stopping for this template.`);
+             break; 
+        }
+        if (endDate && isBefore(endDate, currentRecurrenceDate) ) { // Check if currentRecurrenceDate has passed endDate
+            console.log(`[TransactionContext] Template ${template.id} - Current recurrence date ${format(currentRecurrenceDate, 'yyyy-MM-dd')} is after end date ${format(endDate, 'yyyy-MM-dd')}. Stopping for this template.`);
+            break;
         }
 
-        // Check if an instance for this date (from this template) already exists
+
         const findExisting = allTransactions.find(
-          t => !t.isRecurring && // only find actual logged instances, not other templates
+          t => !t.isRecurring &&
           t.description === template.description &&
           t.amount === template.amount &&
           t.type === template.type &&
           t.category === template.category &&
-          isValid(parseISO(t.date)) && // ensure existing transaction date is valid
+          t.date && // Ensure date string exists
+          isValid(parseISO(t.date.includes('T') ? t.date : `${t.date}T00:00:00Z`)) &&
           isSameDay(parseISO(t.date.includes('T') ? t.date : `${t.date}T00:00:00Z`), currentRecurrenceDate)
         );
 
@@ -147,75 +151,63 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             description: template.description,
             amount: template.amount,
             type: template.type,
-            date: format(currentRecurrenceDate, 'yyyy-MM-dd'), // Ensure correct format
+            date: format(currentRecurrenceDate, 'yyyy-MM-dd'),
             category: template.category,
-            isRecurring: false, // Logged instances are not themselves recurring templates
+            isRecurring: false,
             recurrenceFrequency: 'none',
             recurrenceEndDate: null,
           };
-          // Using internalAddTransaction requires data matching TransactionInputData structure
           const preparedData = prepareTransactionDataForFirestore(newInstanceData as TransactionInputData, currentUser.uid);
-          const newDocRef = doc(collection(db, 'transactions')); // Generate new doc ref for batch
+          const newDocRef = doc(collection(db, 'transactions'));
           batch.set(newDocRef, preparedData);
           transactionsAddedInBatch++;
         } else {
           console.log(`[TransactionContext] Template ${template.id} - Existing transaction found for ${format(currentRecurrenceDate, 'yyyy-MM-dd')}. Skipping.`);
         }
 
-        // Increment currentRecurrenceDate
+        const prevRecurrenceDate = currentRecurrenceDate;
         switch (template.recurrenceFrequency) {
-          case 'daily':
-            currentRecurrenceDate = addDays(currentRecurrenceDate, 1);
-            break;
-          case 'weekly':
-            currentRecurrenceDate = addWeeks(currentRecurrenceDate, 1);
-            break;
-          case 'monthly':
-            currentRecurrenceDate = addMonths(currentRecurrenceDate, 1);
-            break;
-          case 'yearly':
-            currentRecurrenceDate = addYears(currentRecurrenceDate, 1);
-            break;
+          case 'daily': currentRecurrenceDate = addDays(currentRecurrenceDate, 1); break;
+          case 'weekly': currentRecurrenceDate = addWeeks(currentRecurrenceDate, 1); break;
+          case 'monthly': currentRecurrenceDate = addMonths(currentRecurrenceDate, 1); break;
+          case 'yearly': currentRecurrenceDate = addYears(currentRecurrenceDate, 1); break;
           default:
             console.warn(`[TransactionContext] Template ${template.id} - Unknown frequency: ${template.recurrenceFrequency}. Stopping for this template.`);
-            // Break from inner while loop for this template
-            currentRecurrenceDate = addDays(today,1); // to break the loop
-            continue; 
+            safetyCounter = MAX_ITERATIONS_PER_TEMPLATE; // Break outer while loop
+            break;
         }
-        if (isBefore(originalTransactionDate, currentRecurrenceDate) && isEqual(originalTransactionDate, addDays(currentRecurrenceDate, -1)) && template.recurrenceFrequency === 'daily') {
-            // Safety break for daily to prevent potential infinite loops if date logic is flawed, very unlikely with date-fns
-            if (currentRecurrenceDate > addYears(originalTransactionDate, 5)) { // Arbitrary 5 year limit for safety
-                 console.warn(`[TransactionContext] Template ${template.id} - Daily recurrence safety break reached. Stopping.`);
-                 break;
-            }
+        if (isEqual(prevRecurrenceDate, currentRecurrenceDate) && template.recurrenceFrequency !== 'none') {
+            console.error(`[TransactionContext] Template ${template.id} - Date did not advance for frequency ${template.recurrenceFrequency}. Breaking to prevent infinite loop.`);
+            safetyCounter = MAX_ITERATIONS_PER_TEMPLATE; // Break outer while loop
+            break;
         }
       }
-       console.log(`[TransactionContext] Template ${template.id} - Finished processing potential dates.`);
+      if (safetyCounter >= MAX_ITERATIONS_PER_TEMPLATE) {
+        console.warn(`[TransactionContext] Template ${template.id} - Reached max iterations. Stopping processing for this template.`);
+      }
+      console.log(`[TransactionContext] Template ${template.id} - Finished processing potential dates.`);
     }
 
     if (transactionsAddedInBatch > 0) {
       try {
         await batch.commit();
         console.log(`[TransactionContext] Successfully added ${transactionsAddedInBatch} new recurring transaction instances.`);
-        toast({ title: "Recurring Transactions", description: `${transactionsAddedInBatch} recurring transactions were logged.`, variant: "default" });
-        // No need to manually re-fetch, onSnapshot will update the list
+        // Toasting here might be too frequent if processing happens often. Consider if needed.
+        // toast({ title: "Recurring Transactions", description: `${transactionsAddedInBatch} recurring transactions were logged.`, variant: "default" });
       } catch (err) {
         console.error("[TransactionContext] Error committing batch for recurring transactions:", err);
         toast({ title: "Error", description: "Could not log some recurring transactions.", variant: "destructive" });
       }
     } else {
-        console.log("[TransactionContext] No new recurring instances needed to be logged in this run.");
+      console.log("[TransactionContext] No new recurring instances needed to be logged in this run.");
     }
-    // Mark templates as processed for this session, though this needs refinement for true idempotency across sessions/reloads
-    // recurringTemplates.forEach(t => t.id && processedRecurringTemplates.add(t.id));
-
-  }, [currentUser, toast, internalAddTransaction, processedRecurringTemplates]);
+  }, [currentUser, toast, internalAddTransaction]);
 
 
+  // Effect 1: Firestore subscription and data fetching
   useEffect(() => {
     setLoading(true);
     setError(null);
-    setProcessedRecurringTemplates(new Set()); // Reset processed templates on user change
 
     if (currentUser) {
       console.log('[TransactionContext] Setting up snapshot. Current user for query:', currentUser.uid);
@@ -230,21 +222,18 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         console.log(`[TransactionContext] Snapshot received. querySnapshot.empty: ${querySnapshot.empty}, Docs count: ${querySnapshot.size}`);
         const userTransactions: Transaction[] = [];
 
-        if (querySnapshot.empty) {
-          console.log('[TransactionContext] Query returned no documents for user:', currentUser.uid);
-        }
-
         querySnapshot.forEach((document) => {
           try {
             const data = document.data();
             let formattedDate: string;
             if (typeof data.date === 'string') {
-                const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00Z`);
-                if (isValid(parsedDate)) {
-                  formattedDate = format(parsedDate, 'yyyy-MM-dd');
-                } else {
-                  throw new Error('Invalid date string after attempting to make it ISO compatible');
-                }
+              const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00Z`);
+              if (isValid(parsedDate)) {
+                formattedDate = format(parsedDate, 'yyyy-MM-dd');
+              } else {
+                console.warn(`[TransactionContext] Doc ${document.id} has invalid date string: ${data.date}. Defaulting to today.`);
+                formattedDate = format(new Date(), 'yyyy-MM-dd');
+              }
             } else if (data.date instanceof Timestamp) {
               formattedDate = format(data.date.toDate(), 'yyyy-MM-dd');
             } else {
@@ -255,12 +244,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             let formattedRecurrenceEndDate: string | null = null;
             if (data.recurrenceEndDate) {
               if (typeof data.recurrenceEndDate === 'string') {
-                 try {
-                    const parsedDate = parseISO(data.recurrenceEndDate.includes('T') ? data.recurrenceEndDate : `${data.recurrenceEndDate}T00:00:00Z`);
-                    if (isValid(parsedDate)) {
-                        formattedRecurrenceEndDate = format(parsedDate, 'yyyy-MM-dd');
-                    }
-                 } catch (e) { /* Keep null if error */ }
+                const parsedDate = parseISO(data.recurrenceEndDate.includes('T') ? data.recurrenceEndDate : `${data.recurrenceEndDate}T00:00:00Z`);
+                if (isValid(parsedDate)) {
+                  formattedRecurrenceEndDate = format(parsedDate, 'yyyy-MM-dd');
+                }
               } else if (data.recurrenceEndDate instanceof Timestamp) {
                 formattedRecurrenceEndDate = format(data.recurrenceEndDate.toDate(), 'yyyy-MM-dd');
               }
@@ -280,23 +267,15 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             } as Transaction);
           } catch (e) {
             console.error(`[TransactionContext] Error processing document ${document.id}:`, e);
-            setError(`Error processing transaction data for doc ${document.id}. See console.`);
+            // setError(`Error processing transaction data for doc ${document.id}. See console.`); // Avoid setting global error for single doc
           }
         });
         
-        console.log('[TransactionContext] Processed documents. Resulting userTransactions (before recurring check):', JSON.stringify(userTransactions.map(t => ({id: t.id, date: t.date, isRecurring: t.isRecurring, freq: t.recurrenceFrequency})), null, 2).substring(0, 500) + "...");
+        console.log('[TransactionContext] Processed documents. Resulting userTransactions (first 5):', JSON.stringify(userTransactions.slice(0,5).map(t => ({id: t.id, date: t.date, desc: t.description, isRec: t.isRecurring, freq: t.recurrenceFrequency})), null, 2));
 
         setTransactions(userTransactions);
         setLoading(false);
-        setError(null);
-        
-        // After transactions are loaded and state is updated, check for recurring ones.
-        // Run this asynchronously to not block the initial render of loaded transactions.
-        if(userTransactions.length > 0) {
-             setTimeout(() => checkAndLogRecurringTransactions(userTransactions), 0);
-        }
-
-
+        // setError(null); // setError is at the top of useEffect
       }, (err: FirestoreError) => {
         console.error("[TransactionContext] Error fetching transactions from Firestore:", err.code, err.message, err);
         if (err.code === 'permission-denied') {
@@ -322,12 +301,41 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         unsubscribe();
       };
     } else {
-      console.log('[TransactionContext] No current user. Clearing transactions.');
       setTransactions([]);
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, toast, checkAndLogRecurringTransactions]); // checkAndLogRecurringTransactions is now stable due to useCallback
+  }, [currentUser, toast]); // Only re-subscribe if currentUser changes. toast is for error reporting within.
+
+  // Effect for handling recurring transactions
+  useEffect(() => {
+    if (!currentUser || loading || transactions.length === 0) {
+      return;
+    }
+
+    const timerId = setTimeout(async () => {
+      if (processingRecurringRef.current) {
+        console.log("[TransactionContext] Recurring check already in progress (timeout), skipping.");
+        return;
+      }
+      processingRecurringRef.current = true;
+      console.log("[TransactionContext] Effect for recurring: Triggering checkAndLogRecurringTransactions with current transactions count:", transactions.length);
+      try {
+        // Pass a copy of transactions to avoid potential issues if the state updates while this async function is running.
+        // Although checkAndLogRecurringTransactions receives it as a parameter, this is an extra precaution.
+        await checkAndLogRecurringTransactions([...transactions]);
+      } catch (e) {
+        console.error("[TransactionContext] Error during checkAndLogRecurringTransactions call:", e);
+        // Optionally, set an error state or toast here if critical
+      } finally {
+        processingRecurringRef.current = false;
+        console.log("[TransactionContext] Effect for recurring: Finished checkAndLogRecurringTransactions.");
+      }
+    }, 200); // A small delay to allow current render cycle to complete.
+
+    return () => clearTimeout(timerId); // Cleanup the timeout if dependencies change before it fires.
+
+  }, [transactions, currentUser, loading, checkAndLogRecurringTransactions, toast]); // Added toast here as checkAndLogRecurringTransactions uses it.
+
 
   const prepareTransactionDataForFirestore = (transactionData: TransactionInputData, userId: string) => {
     let dateString: string;
@@ -356,7 +364,6 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       userId: userId, 
     };
   };
-
 
   const addTransaction = async (transactionData: TransactionInputData, options: { navigate?: boolean; showToast?: boolean } = { navigate: true, showToast: true }): Promise<string | null> => {
     if (!currentUser) {
@@ -428,7 +435,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       return localTransaction;
     }
 
-    setLoading(true);
+    // setLoading(true); // This might cause issues if called from edit page before main list loads
     setError(null);
     try {
       const transactionRef = doc(db, 'transactions', id);
@@ -438,7 +445,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         if (data.userId !== currentUser.uid) {
           setError("Permission denied. This transaction does not belong to you.");
           toast({ title: "Access Denied", description: "You do not have permission to view this transaction.", variant: "destructive" });
-          setLoading(false);
+          // setLoading(false);
           return null;
         }
 
@@ -464,7 +471,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             }
         }
         
-        setLoading(false);
+        // setLoading(false);
         return { 
             id: docSnap.id, 
             ...data, 
@@ -476,17 +483,16 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
       } else {
         setError("Transaction not found.");
-        setLoading(false);
+        // setLoading(false);
         return null;
       }
     } catch (err: any) {
       console.error("[TransactionContext] Error fetching transaction by ID:", err);
       setError(`Could not fetch transaction: ${err.message}`);
-      setLoading(false);
+      // setLoading(false);
       return null;
     }
   };
-
 
   return (
     <TransactionContext.Provider value={{ transactions, addTransaction, updateTransaction, deleteTransaction, getTransactionById, loading, error }}>
@@ -502,5 +508,3 @@ export function useTransactions() {
   }
   return context;
 }
-
-    
