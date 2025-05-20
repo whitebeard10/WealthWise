@@ -9,14 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Loading from '@/app/loading';
 import { format } from 'date-fns';
-import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3, TrendingUp, KeyRound } from 'lucide-react'; // Added KeyRound
+import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3, TrendingUp, KeyRound, Download } from 'lucide-react'; // Added Download
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 export default function ProfilePage() {
   const { currentUser, loading: authLoading, logOut } = useAuth();
   const { transactions, loading: transactionsLoading } = useTransactions();
   const router = useRouter();
+  const { toast } = useToast(); // Initialize toast
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
@@ -37,8 +39,60 @@ export default function ProfilePage() {
   // Placeholder for edit profile functionality
   const handleEditProfile = () => {
     // In a real app, this would navigate to an edit profile page or open a modal
-    alert("Edit profile functionality coming soon!");
+    toast({ title: "Coming Soon!", description: "Edit profile functionality is under development." });
   };
+
+  const convertToCSV = (data: typeof transactions) => {
+    if (data.length === 0) return "";
+    const replacer = (key: string, value: any) => value === null || value === undefined ? '' : value;
+    const header = Object.keys(data[0]).filter(key => key !== 'userId').join(','); // Exclude userId from header
+    const rows = data.map(row =>
+      Object.keys(row)
+        .filter(key => key !== 'userId') // Exclude userId from data rows
+        .map(fieldName => JSON.stringify((row as any)[fieldName], replacer))
+        .join(',')
+    );
+    return [header, ...rows].join('\r\n');
+  };
+
+  const handleExportTransactions = () => {
+    if (transactions.length === 0) {
+      toast({
+        title: "No Transactions",
+        description: "There are no transactions to export.",
+        variant: "default",
+      });
+      return;
+    }
+
+    try {
+      const csvString = convertToCSV(transactions);
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      const fileName = `wealthwise_transactions_${currentUser.uid}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute("download", fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Export Successful",
+        description: `Transactions exported to ${fileName}`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Error exporting transactions:", error);
+      toast({
+        title: "Export Failed",
+        description: "Could not export transactions. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -51,7 +105,7 @@ export default function ProfilePage() {
       </div>
       <Separator />
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 mt-6">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mt-6">
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-xl">
@@ -125,6 +179,23 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Download className="h-6 w-6 text-primary" /> 
+              Data Management
+            </CardTitle>
+            <CardDescription>Export your financial data.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <Button onClick={handleExportTransactions} className="w-full shadow-md hover:shadow-lg transition-shadow">
+              <Download className="mr-2 h-4 w-4" />
+              Export Transactions (CSV)
+            </Button>
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );
