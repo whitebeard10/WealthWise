@@ -12,8 +12,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CalendarIcon, Loader2, Wand2 } from 'lucide-react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, set } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTransactions } from '@/contexts/TransactionContext';
 import type { Transaction } from '@/lib/types';
@@ -29,6 +30,25 @@ const transactionSchema = z.object({
   type: z.enum(['income', 'expense']),
   date: z.date({ required_error: "A date is required."}),
   category: z.string().min(1, 'Category is required'),
+  isRecurring: z.boolean().optional(),
+  recurrenceFrequency: z.enum(['none', 'daily', 'weekly', 'monthly', 'yearly']).optional(),
+  recurrenceEndDate: z.date().nullable().optional(),
+}).refine(data => {
+  if (data.isRecurring && (!data.recurrenceFrequency || data.recurrenceFrequency === 'none')) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Recurrence frequency must be selected if transaction is recurring.",
+  path: ["recurrenceFrequency"],
+}).refine(data => {
+  if (data.isRecurring && data.recurrenceEndDate && data.recurrenceEndDate < data.date) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Recurrence end date cannot be before the transaction date.",
+  path: ["recurrenceEndDate"],
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -60,36 +80,51 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
       type: initialData?.type || 'expense',
       date: initialData?.date ? (isValid(parseISO(initialData.date)) ? parseISO(initialData.date) : new Date()) : new Date(),
       category: initialData?.category || '',
+      isRecurring: initialData?.isRecurring || false,
+      recurrenceFrequency: initialData?.recurrenceFrequency || 'none',
+      recurrenceEndDate: initialData?.recurrenceEndDate && isValid(parseISO(initialData.recurrenceEndDate)) ? parseISO(initialData.recurrenceEndDate) : null,
     },
   });
+
+  const isRecurringValue = form.watch('isRecurring');
 
   useEffect(() => {
     if (initialData) {
       const formDate = initialData.date ? parseISO(initialData.date) : new Date();
+      const formRecurrenceEndDate = initialData.recurrenceEndDate ? parseISO(initialData.recurrenceEndDate) : null;
+
       if (!isValid(formDate)) {
         console.warn("Initial data had an invalid date string:", initialData.date);
       }
+      if (initialData.recurrenceEndDate && !isValid(formRecurrenceEndDate)) {
+        console.warn("Initial data had an invalid recurrence end date string:", initialData.recurrenceEndDate);
+      }
+
       form.reset({
         ...initialData,
         date: isValid(formDate) ? formDate : new Date(),
+        isRecurring: initialData.isRecurring || false,
+        recurrenceFrequency: initialData.recurrenceFrequency || 'none',
+        recurrenceEndDate: formRecurrenceEndDate && isValid(formRecurrenceEndDate) ? formRecurrenceEndDate : null,
       });
       if (initialData.category && !defaultCategories.includes(initialData.category)) {
         setAvailableCategories(prev => {
           if (prev.includes(initialData.category!)) return prev;
-          // Add to beginning for better visibility if it's the current category
           return [initialData.category!, ...prev.filter(c => c !== initialData.category!)];
         });
       }
     } else {
-        // Reset to defaults if no initialData (e.g., navigating from edit to add)
         form.reset({
             description: '',
             amount: 0,
             type: 'expense',
             date: new Date(),
             category: '',
+            isRecurring: false,
+            recurrenceFrequency: 'none',
+            recurrenceEndDate: null,
         });
-        setAvailableCategories(defaultCategories); // Reset categories to default
+        setAvailableCategories(defaultCategories);
     }
   }, [initialData, form]);
 
@@ -103,7 +138,6 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
         if (prev.includes(newCategory)) return prev;
         return [newCategory, ...prev.filter(c => c !== newCategory)];
       });
-      // Only auto-set category if not editing, or if editing but category is not yet set from initialData
       if (!isEditMode || (isEditMode && !form.getValues('category'))) {
         form.setValue('category', newCategory, { shouldValidate: true });
       }
@@ -119,8 +153,7 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
     setSuggestedCategory(null);
     try {
       const result = await categorizeTransaction({ description: descriptionValue });
-      setSuggestedCategory(result); // This will trigger the useEffect above
-      // form.setValue('category', result.category, { shouldValidate: true }); // Now handled in useEffect
+      setSuggestedCategory(result); 
       toast({ title: "AI Suggestion", description: `Suggested category: ${result.category} (Confidence: ${(result.confidence * 100).toFixed(0)}%)`, variant: "default" });
     } catch (error) {
       console.error('Error categorizing transaction:', error);
@@ -131,10 +164,23 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
   };
   
   const onSubmit = async (data: TransactionFormData) => {
+    const submissionData: Omit<Transaction, 'id' | 'userId' | 'date'> & { date: Date | string, recurrenceEndDate?: string | null } = {
+      ...data,
+      date: data.date, // Will be formatted to string in context
+      recurrenceFrequency: data.isRecurring ? data.recurrenceFrequency : 'none',
+      recurrenceEndDate: data.isRecurring && data.recurrenceEndDate ? format(data.recurrenceEndDate, 'yyyy-MM-dd') : null,
+    };
+
+    if (!data.isRecurring) {
+        submissionData.recurrenceFrequency = 'none';
+        submissionData.recurrenceEndDate = null;
+    }
+
+
     if (isEditMode && initialData?.id) {
-      await updateTransaction(initialData.id, data);
+      await updateTransaction(initialData.id, submissionData);
     } else {
-      await addTransaction(data);
+      await addTransaction(submissionData);
     }
     setSuggestedCategory(null);
   };
@@ -250,6 +296,85 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
               </p>
             )}
           </div>
+
+          {/* Recurring Transaction */}
+          <div className="space-y-4 pt-2 border-t border-border">
+             <Controller
+                name="isRecurring"
+                control={form.control}
+                render={({ field }) => (
+                    <div className="flex items-center space-x-2 mt-4">
+                        <Checkbox
+                            id="isRecurring"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                        <Label htmlFor="isRecurring" className="font-medium">
+                            This is a recurring transaction
+                        </Label>
+                    </div>
+                )}
+            />
+            {isRecurringValue && (
+                <>
+                    <div className="space-y-2">
+                        <Label htmlFor="recurrenceFrequency">Frequency</Label>
+                        <Controller
+                            control={form.control}
+                            name="recurrenceFrequency"
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || 'none'}>
+                                    <SelectTrigger id="recurrenceFrequency">
+                                        <SelectValue placeholder="Select frequency" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none" disabled>Select frequency</SelectItem>
+                                        <SelectItem value="daily">Daily</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="yearly">Yearly</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                        {form.formState.errors.recurrenceFrequency && <p className="text-sm text-destructive">{form.formState.errors.recurrenceFrequency.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="recurrenceEndDate">End Date (Optional)</Label>
+                        <Controller
+                            name="recurrenceEndDate"
+                            control={form.control}
+                            render={({ field }) => (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {field.value ? format(field.value, "PPP") : <span>Pick an end date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={(date) => field.onChange(date)}
+                                            disabled={(date) => date < form.getValues('date') || date < new Date("1900-01-01")}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                        />
+                         {form.formState.errors.recurrenceEndDate && <p className="text-sm text-destructive">{form.formState.errors.recurrenceEndDate.message}</p>}
+                    </div>
+                </>
+            )}
+          </div>
           
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -260,5 +385,3 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
     </Card>
   );
 }
-
-    

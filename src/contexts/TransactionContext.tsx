@@ -24,10 +24,17 @@ import { format, parseISO, isValid } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 
+// Define a more specific type for data passed to add/update functions
+type TransactionInputData = Omit<Transaction, 'id' | 'userId' | 'date' | 'recurrenceEndDate'> & {
+  date: Date | string;
+  recurrenceEndDate?: Date | string | null; // Allow Date, string, or null
+};
+
+
 interface TransactionContextType {
   transactions: Transaction[];
-  addTransaction: (transactionData: Omit<Transaction, 'id' | 'userId' | 'date'> & { date: Date | string }) => Promise<void>;
-  updateTransaction: (id: string, transactionData: Omit<Transaction, 'id' | 'userId' | 'date'> & { date: Date | string }) => Promise<void>;
+  addTransaction: (transactionData: TransactionInputData) => Promise<void>;
+  updateTransaction: (id: string, transactionData: TransactionInputData) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   getTransactionById: (id: string) => Promise<Transaction | null>;
   loading: boolean;
@@ -64,60 +71,76 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         if (querySnapshot.empty) {
           console.log('[TransactionContext] Query returned no documents for user:', currentUser.uid);
         } else {
-          console.log('[TransactionContext] Processing documents...');
+          // console.log('[TransactionContext] Processing documents...');
         }
 
-        querySnapshot.forEach((doc) => {
-          console.log(`[TransactionContext] Attempting to process doc ${doc.id}`);
+        querySnapshot.forEach((document) => {
+          // console.log(`[TransactionContext] Attempting to process doc ${document.id}`);
           try {
-            const data = doc.data();
-             if (querySnapshot.docs[0] === doc) {
-              console.log('[TransactionContext] Raw data of first doc:', { id: doc.id, ...data });
-            }
+            const data = document.data();
+            //  if (querySnapshot.docs[0] === document) {
+            //   console.log('[TransactionContext] Raw data of first doc:', { id: document.id, ...data });
+            // }
 
             let formattedDate: string;
             if (typeof data.date === 'string') {
               try {
-                // Ensure date is in yyyy-MM-dd format, parseISO expects more complete ISO string
-                const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00`);
+                const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00Z`);
                 if (isValid(parsedDate)) {
                   formattedDate = format(parsedDate, 'yyyy-MM-dd');
                 } else {
                   throw new Error('Invalid date string after attempting to make it ISO compatible');
                 }
               } catch (e) {
-                console.warn(`[TransactionContext] Could not parse date string "${data.date}" for doc ${doc.id}. Using as is or defaulting. Error: ${e}`, e);
-                // Attempt to parse as yyyy-MM-dd, if fails, default.
+                console.warn(`[TransactionContext] Could not parse date string "${data.date}" for doc ${document.id}. Using as is or defaulting. Error: ${e}`, e);
                 const parts = data.date.split('-');
                 if(parts.length === 3 && parts.every((p:string) => !isNaN(parseInt(p)))) {
-                    formattedDate = data.date; // Assume it's already yyyy-MM-dd
+                    formattedDate = data.date; 
                 } else {
-                    formattedDate = format(new Date(), 'yyyy-MM-dd'); // Fallback
+                    formattedDate = format(new Date(), 'yyyy-MM-dd'); 
                 }
               }
             } else if (data.date instanceof Timestamp) {
               formattedDate = format(data.date.toDate(), 'yyyy-MM-dd');
             } else {
-              console.warn(`[TransactionContext] Unexpected date format for doc ${doc.id}:`, data.date, ". Defaulting to today.");
+              console.warn(`[TransactionContext] Unexpected date format for doc ${document.id}:`, data.date, ". Defaulting to today.");
               formattedDate = format(new Date(), 'yyyy-MM-dd');
             }
+            
+            let formattedRecurrenceEndDate: string | null = null;
+            if (data.recurrenceEndDate) {
+              if (typeof data.recurrenceEndDate === 'string') {
+                 try {
+                    const parsedDate = parseISO(data.recurrenceEndDate.includes('T') ? data.recurrenceEndDate : `${data.recurrenceEndDate}T00:00:00Z`);
+                    if (isValid(parsedDate)) {
+                        formattedRecurrenceEndDate = format(parsedDate, 'yyyy-MM-dd');
+                    } else { /* Keep null if invalid */ }
+                 } catch (e) { /* Keep null if error */ }
+              } else if (data.recurrenceEndDate instanceof Timestamp) {
+                formattedRecurrenceEndDate = format(data.recurrenceEndDate.toDate(), 'yyyy-MM-dd');
+              }
+            }
+
 
             userTransactions.push({
-              id: doc.id,
+              id: document.id,
               description: data.description,
               amount: data.amount,
               type: data.type,
               date: formattedDate,
               category: data.category,
               userId: data.userId,
+              isRecurring: data.isRecurring || false,
+              recurrenceFrequency: data.recurrenceFrequency || 'none',
+              recurrenceEndDate: formattedRecurrenceEndDate,
             } as Transaction);
           } catch (e) {
-            console.error(`[TransactionContext] Error processing document ${doc.id}:`, e);
-            setError(`Error processing transaction data for doc ${doc.id}. See console.`);
+            console.error(`[TransactionContext] Error processing document ${document.id}:`, e);
+            setError(`Error processing transaction data for doc ${document.id}. See console.`);
           }
         });
-
-        console.log('[TransactionContext] Processed documents. Resulting userTransactions:', JSON.stringify(userTransactions, null, 2));
+        
+        console.log('[TransactionContext] Processed documents. Resulting userTransactions:', JSON.stringify(userTransactions.map(t => ({id: t.id, date: t.date, recurrenceEndDate: t.recurrenceEndDate})), null, 2));
 
 
         if (userTransactions.length === 0 && !querySnapshot.empty) {
@@ -134,7 +157,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
           setError("Permission denied. Please check Firestore security rules.");
           toast({title: "Firestore Error", description: "Permission denied. Check security rules.", variant: "destructive"});
         } else if (err.code === 'unimplemented' || (err.message && err.message.toLowerCase().includes('index')) || err.code === 'failed-precondition') {
-            setError("Firestore query requires an index. Check Firebase console for a link to create it.");
+            setError(`Firestore query requires an index. Check Firebase console for a link to create it or details. Error: ${err.message}`);
             toast({title: "Firestore Error", description: `Query requires an index. Check Firebase console. (${err.message})`, variant: "destructive"});
         } else {
           setError("Could not load transactions from the database. See console for details.");
@@ -155,7 +178,36 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser, toast]);
 
-  const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'userId' | 'date'> & { date: Date | string }) => {
+  const prepareTransactionDataForFirestore = (transactionData: TransactionInputData) => {
+    let dateString: string;
+    if (typeof transactionData.date === 'string') {
+        const parsedDate = parseISO(transactionData.date.includes('T') ? transactionData.date : `${transactionData.date}T00:00:00Z`);
+        dateString = isValid(parsedDate) ? format(parsedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+    } else {
+      dateString = format(transactionData.date, 'yyyy-MM-dd');
+    }
+
+    let recurrenceEndDateString: string | null = null;
+    if (transactionData.isRecurring && transactionData.recurrenceEndDate) {
+      if (typeof transactionData.recurrenceEndDate === 'string') {
+        const parsedRecEndDate = parseISO(transactionData.recurrenceEndDate.includes('T') ? transactionData.recurrenceEndDate : `${transactionData.recurrenceEndDate}T00:00:00Z`);
+        recurrenceEndDateString = isValid(parsedRecEndDate) ? format(parsedRecEndDate, 'yyyy-MM-dd') : null;
+      } else if (transactionData.recurrenceEndDate instanceof Date) { // Check if it's a Date object
+        recurrenceEndDateString = format(transactionData.recurrenceEndDate, 'yyyy-MM-dd');
+      }
+    }
+    
+    return {
+      ...transactionData,
+      date: dateString,
+      recurrenceFrequency: transactionData.isRecurring ? transactionData.recurrenceFrequency : 'none',
+      recurrenceEndDate: transactionData.isRecurring ? recurrenceEndDateString : null,
+      userId: currentUser!.uid, // currentUser is checked before calling this path
+    };
+  };
+
+
+  const addTransaction = async (transactionData: TransactionInputData) => {
     if (!currentUser) {
       setError("You must be logged in to add a transaction.");
       toast({ title: "Authentication Error", description: "You must be logged in to add a transaction.", variant: "destructive"});
@@ -163,22 +215,10 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
     setError(null);
     try {
-      let dateString: string;
-      if (typeof transactionData.date === 'string') {
-          const parsedDate = parseISO(transactionData.date.includes('T') ? transactionData.date : `${transactionData.date}T00:00:00`);
-          dateString = isValid(parsedDate) ? format(parsedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-      } else {
-        dateString = format(transactionData.date, 'yyyy-MM-dd');
-      }
-
-      const newTransaction = {
-        ...transactionData,
-        date: dateString,
-        userId: currentUser.uid,
-      };
+      const newTransaction = prepareTransactionDataForFirestore(transactionData);
       await addDoc(collection(db, 'transactions'), newTransaction);
       toast({title: "Success", description: "Transaction added successfully!", variant: "default"});
-      router.push('/'); // Navigate to dashboard after adding
+      router.push('/'); 
     } catch (err: any) {
       console.error("[TransactionContext] Error adding transaction to Firestore:", err);
       setError(`Could not save the transaction: ${err.message}`);
@@ -186,7 +226,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateTransaction = async (id: string, transactionData: Omit<Transaction, 'id' | 'userId' | 'date'> & { date: Date | string }) => {
+  const updateTransaction = async (id: string, transactionData: TransactionInputData) => {
     if (!currentUser) {
       setError("You must be logged in to update a transaction.");
       toast({ title: "Authentication Error", description: "You must be logged in to update a transaction.", variant: "destructive" });
@@ -194,24 +234,11 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
     setError(null);
     try {
-      let dateString: string;
-       if (typeof transactionData.date === 'string') {
-          const parsedDate = parseISO(transactionData.date.includes('T') ? transactionData.date : `${transactionData.date}T00:00:00`);
-          dateString = isValid(parsedDate) ? format(parsedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-      } else {
-        dateString = format(transactionData.date, 'yyyy-MM-dd');
-      }
-
       const transactionRef = doc(db, 'transactions', id);
-      // Ensure userId is not accidentally updated, or if it is, it matches current user.
-      const updatedTxData = {
-        ...transactionData,
-        date: dateString,
-        userId: currentUser.uid, // Keep original userId or ensure it matches
-      };
+      const updatedTxData = prepareTransactionDataForFirestore(transactionData);
       await updateDoc(transactionRef, updatedTxData);
       toast({ title: "Success", description: "Transaction updated successfully!", variant: "default" });
-      router.push('/'); // Navigate to dashboard after updating
+      router.push('/'); 
     } catch (err: any) {
       console.error("[TransactionContext] Error updating transaction in Firestore:", err);
       setError(`Could not update the transaction: ${err.message}`);
@@ -228,8 +255,6 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const transactionRef = doc(db, 'transactions', id);
-      // Optional: Add a check to ensure the transaction belongs to the user before deleting,
-      // though security rules should primarily handle this.
       await deleteDoc(transactionRef);
       toast({ title: "Success", description: "Transaction deleted successfully!", variant: "default" });
     } catch (err: any) {
@@ -244,13 +269,12 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       setError("You must be logged in to fetch a transaction.");
       return null;
     }
-    // First, check if the transaction is already in the local state
+    
     const localTransaction = transactions.find(t => t.id === id);
     if (localTransaction) {
       return localTransaction;
     }
 
-    // If not in local state, fetch from Firestore
     setLoading(true);
     setError(null);
     try {
@@ -258,7 +282,6 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       const docSnap = await getDoc(transactionRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Security check: ensure fetched transaction belongs to the current user
         if (data.userId !== currentUser.uid) {
           setError("Permission denied. This transaction does not belong to you.");
           toast({ title: "Access Denied", description: "You do not have permission to view this transaction.", variant: "destructive" });
@@ -268,16 +291,36 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
         let formattedDate: string;
         if (typeof data.date === 'string') {
-            const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00`);
+            const parsedDate = parseISO(data.date.includes('T') ? data.date : `${data.date}T00:00:00Z`);
             formattedDate = isValid(parsedDate) ? format(parsedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
         } else if (data.date instanceof Timestamp) {
           formattedDate = format(data.date.toDate(), 'yyyy-MM-dd');
         } else {
           formattedDate = format(new Date(), 'yyyy-MM-dd');
         }
+
+        let formattedRecurrenceEndDate: string | null = null;
+        if (data.recurrenceEndDate) {
+            if (typeof data.recurrenceEndDate === 'string') {
+                const parsedDate = parseISO(data.recurrenceEndDate.includes('T') ? data.recurrenceEndDate : `${data.recurrenceEndDate}T00:00:00Z`);
+                if (isValid(parsedDate)) {
+                    formattedRecurrenceEndDate = format(parsedDate, 'yyyy-MM-dd');
+                }
+            } else if (data.recurrenceEndDate instanceof Timestamp) {
+                formattedRecurrenceEndDate = format(data.recurrenceEndDate.toDate(), 'yyyy-MM-dd');
+            }
+        }
         
         setLoading(false);
-        return { id: docSnap.id, ...data, date: formattedDate } as Transaction;
+        return { 
+            id: docSnap.id, 
+            ...data, 
+            date: formattedDate,
+            isRecurring: data.isRecurring || false,
+            recurrenceFrequency: data.recurrenceFrequency || 'none',
+            recurrenceEndDate: formattedRecurrenceEndDate
+        } as Transaction;
+
       } else {
         setError("Transaction not found.");
         setLoading(false);

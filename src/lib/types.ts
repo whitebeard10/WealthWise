@@ -7,6 +7,9 @@ export interface Transaction {
   date: string; // ISO string format (e.g., "2023-10-26")
   category: string;
   userId?: string; // To associate with the authenticated user
+  isRecurring?: boolean;
+  recurrenceFrequency?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  recurrenceEndDate?: string | null; // yyyy-MM-dd format, or null if no end date
 }
 
 export interface FinancialSummaryData {

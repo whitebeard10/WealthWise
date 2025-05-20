@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, ListChecks, Edit3, Trash2, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, ListChecks, Edit3, Trash2, MoreHorizontal, Repeat } from 'lucide-react'; // Added Repeat
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,10 +46,12 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
 
   const formatDateString = (dateStr: string) => {
     try {
-      return format(parseISO(dateStr), 'MMM dd, yyyy');
+      // Ensure date is parsed as UTC to avoid timezone shifts if only date is provided
+      const parsedDate = parseISO(dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00Z`);
+      return format(parsedDate, 'MMM dd, yyyy');
     } catch (e) {
       console.warn("Failed to parse date for formatting:", dateStr, e);
-      return dateStr;
+      return dateStr; // fallback to original string
     }
   };
 
@@ -119,7 +121,12 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
                 {recentTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell className="font-medium whitespace-nowrap">{formatDateString(transaction.date)}</TableCell>
-                    <TableCell className="truncate max-w-xs">{transaction.description}</TableCell>
+                    <TableCell className="truncate max-w-xs">
+                      <div className="flex items-center gap-2">
+                        {transaction.isRecurring && <Repeat className="h-3 w-3 text-muted-foreground flex-shrink-0" titleAccess='Recurring' />}
+                        <span className="truncate">{transaction.description}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{transaction.category}</TableCell>
                     <TableCell>
                       <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}>
