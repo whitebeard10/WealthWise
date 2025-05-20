@@ -198,4 +198,3 @@ WealthWise adheres to the following style guidelines:
 
 ---
 
-This README should serve as a good starting point. Feel free to expand on any section as the project evolves!
