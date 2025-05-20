@@ -6,7 +6,10 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -21,6 +24,7 @@ interface AuthContextType {
   signUp: (email: string, pass: string) => Promise<User | null>;
   logIn: (email: string, pass: string) => Promise<User | null>;
   logOut: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error: string | null }>;
   setError: (error: string | null) => void;
 }
 
@@ -90,12 +94,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  if (loading) {
-    return <Loading />; // Or any other loading indicator
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; error: string | null }> => {
+    if (!currentUser) {
+      return { success: false, error: 'User not authenticated. Please log in again.' };
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const userEmail = currentUser.email;
+      if (!userEmail) {
+        return { success: false, error: 'User email not found. Cannot change password.' };
+      }
+      const credential = EmailAuthProvider.credential(userEmail, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+      setLoading(false);
+      return { success: true, error: null };
+    } catch (e) {
+      const authError = e as AuthError;
+      console.error('Change password error:', authError);
+      let friendlyError = 'Failed to change password.';
+      if (authError.code === 'auth/wrong-password') {
+        friendlyError = 'Incorrect current password.';
+      } else if (authError.code === 'auth/weak-password') {
+        friendlyError = 'The new password is too weak.';
+      } else if (authError.code === 'auth/requires-recent-login') {
+        friendlyError = 'This operation is sensitive and requires recent authentication. Please log out and log back in before trying again.';
+      }
+      setError(friendlyError);
+      setLoading(false);
+      return { success: false, error: friendlyError };
+    }
+  };
+
+  if (loading && !currentUser && typeof window !== 'undefined' && !['/login', '/signup', '/forgot-password'].includes(window.location.pathname)) {
+     // This check tries to avoid full page loader flash on auth pages or for already known users
+    // but ensures a loader if navigating to protected content while initial auth check is pending.
+    const path = window.location.pathname;
+    if (path !== '/' && !path.startsWith('/_next/')) { // Avoid loader on public home if user is not yet known
+       return <Loading />;
+    }
   }
 
+
   return (
-    <AuthContext.Provider value={{ currentUser, loading, error, signUp, logIn, logOut, setError }}>
+    <AuthContext.Provider value={{ currentUser, loading, error, signUp, logIn, logOut, changePassword, setError }}>
       {children}
     </AuthContext.Provider>
   );

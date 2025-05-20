@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Loading from '@/app/loading';
 import { format } from 'date-fns';
-import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3, TrendingUp } from 'lucide-react'; // Added TrendingUp
+import { User, Mail, CalendarDays, ListChecks, LogOut, Fingerprint, Edit3, TrendingUp, KeyRound } from 'lucide-react'; // Added KeyRound
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
 
 export default function ProfilePage() {
   const { currentUser, loading: authLoading, logOut } = useAuth();
@@ -85,6 +86,17 @@ export default function ProfilePage() {
                 <p className="text-xs text-foreground break-all">{currentUser.uid}</p>
               </div>
             </div>
+            <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
+              <KeyRound className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Security</p>
+                <Link href="/profile/change-password" passHref>
+                  <Button variant="link" className="p-0 h-auto text-sm font-semibold text-primary hover:underline">
+                    Change Password
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -104,7 +116,6 @@ export default function ProfilePage() {
                 <p className="text-sm font-semibold">{totalTransactions}</p>
               </div>
             </div>
-            {/* You can add more summary items here in the future, e.g., average transaction amount, most common category */}
             <div className="flex items-center space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors opacity-50 cursor-not-allowed">
                 <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
@@ -115,11 +126,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
-      {/* Future enhancements could include:
-          - Change password functionality
-          - Delete account option
-          - Theme preferences
-      */}
     </div>
   );
 }
