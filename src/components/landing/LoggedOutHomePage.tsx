@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Leaf, LogIn, UserPlus, BarChart2, ShieldCheck, BrainCircuit } from 'lucide-react';
 
 const CustomBackgroundSVG = () => (
-  <svg 
-    width="100%" 
-    height="100%" 
-    viewBox="0 0 1920 1080" 
-    preserveAspectRatio="xMidYMid slice" 
+  <svg
+    width="100%"
+    height="100%"
+    viewBox="0 0 1920 1080"
+    preserveAspectRatio="xMidYMid slice"
     xmlns="http://www.w3.org/2000/svg"
     className="absolute inset-0 z-0"
   >
@@ -29,7 +29,7 @@ const CustomBackgroundSVG = () => (
       </filter>
     </defs>
     <rect width="100%" height="100%" fill="hsl(var(--background))" /> {/* Base background color */}
-    
+
     {/* Abstract waves/curves */}
     <path d="M-200,700 C300,400 500,1000 800,600 S1100,200 1400,500 S1700,900 2120,500 L2120,1080 L-200,1080 Z" fill="url(#bgGrad1)" opacity="0.7"/>
     <path d="M2120,300 C1800,600 1600,0 1300,400 S1000,800 700,400 S400,0 -200,400 L-200,0 L2120,0 Z" fill="url(#bgGrad2)" opacity="0.6"/>
@@ -43,7 +43,7 @@ const CustomBackgroundSVG = () => (
   </svg>
 );
 
-const FeatureCard = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string, delay: string }) => (
+const FeatureCard = ({ icon: Icon, title, description, delay }: { icon: React.ElementType, title: string, description: string, delay: string }) => (
   <div className="flex flex-col items-center text-center p-4 animate-contentFadeInUp" style={{ animationDelay: delay }}>
     <Icon className="h-10 w-10 text-primary mb-3" />
     <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
@@ -55,7 +55,7 @@ const FeatureCard = ({ icon: Icon, title, description }: { icon: React.ElementTy
 export function LoggedOutHomePage() {
   return (
     <>
-      <div 
+      <div
         className="relative flex min-h-screen flex-col items-center justify-center p-4 overflow-hidden bg-background"
       >
         <CustomBackgroundSVG />
@@ -77,7 +77,7 @@ export function LoggedOutHomePage() {
             <p className="text-md text-foreground/90 animate-contentFadeInUp" style={{ animationDelay: '0.6s' }}>
               Take command of your financial journey. Effortlessly log transactions, visualize your expenses, and plan for a prosperous future with our smart tools. Get started today!
             </p>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6 px-4">
                 <FeatureCard icon={BarChart2} title="Visualize Spending" description="See where your money goes with clear charts." delay="0.7s" />
                 <FeatureCard icon={BrainCircuit} title="AI Forecasts" description="Predict future expenses with AI insights." delay="0.8s" />
@@ -85,21 +85,21 @@ export function LoggedOutHomePage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-              <Button 
-                asChild 
-                size="lg" 
-                className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 animate-contentFadeInUp" 
+              <Button
+                asChild
+                size="lg"
+                className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 animate-contentFadeInUp"
                 style={{ animationDelay: '1.0s' }}
               >
                 <Link href="/login">
                   <LogIn className="mr-2 h-5 w-5" /> Login
                 </Link>
               </Button>
-              <Button 
-                asChild 
-                variant="secondary" 
-                size="lg" 
-                className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 animate-contentFadeInUp" 
+              <Button
+                asChild
+                variant="secondary"
+                size="lg"
+                className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 animate-contentFadeInUp"
                 style={{ animationDelay: '1.1s' }}
               >
                 <Link href="/signup">
@@ -139,7 +139,7 @@ export function LoggedOutHomePage() {
           opacity: 0; /* Start hidden */
           animation: contentFadeInUp 0.5s ease-out forwards;
         }
-        
+
         @keyframes scalePulse {
           0%, 100% {
             transform: scale(1);
