@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase/client'; // Ensure this path is correct
 import { useRouter } from 'next/navigation';
-import Loading from '@/app/loading'; // Import a loading component
+// Loading component import is not needed here if AuthProvider doesn't render it directly
 
 interface AuthContextType {
   currentUser: User | null;
@@ -127,15 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  if (loading && !currentUser && typeof window !== 'undefined' && !['/login', '/signup', '/forgot-password'].includes(window.location.pathname)) {
-     // This check tries to avoid full page loader flash on auth pages or for already known users
-    // but ensures a loader if navigating to protected content while initial auth check is pending.
-    const path = window.location.pathname;
-    if (path !== '/' && !path.startsWith('/_next/')) { // Avoid loader on public home if user is not yet known
-       return <Loading />;
-    }
-  }
-
+  // Removed the problematic if block that conditionally rendered <Loading />
+  // based on window.location.pathname.
+  // AuthProvider should consistently render its children.
 
   return (
     <AuthContext.Provider value={{ currentUser, loading, error, signUp, logIn, logOut, changePassword, setError }}>

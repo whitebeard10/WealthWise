@@ -16,8 +16,9 @@ import { SidebarNav } from './SidebarNav';
 import { Leaf } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { ThemeToggle } from './ThemeToggle'; // Import ThemeToggle
-import Loading from '@/app/loading'; // Ensure Loading component is imported
+import { ThemeToggle } from './ThemeToggle';
+import Loading from '@/app/loading';
+import { usePathname } from 'next/navigation'; // Import usePathname
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -27,12 +28,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const { currentUser, loading: authLoading } = useAuth();
   
-  const path = typeof window !== 'undefined' ? window.location.pathname : '';
-  const isAuthPage = path === '/login' || path === '/signup' || path === '/forgot-password';
+  const pathname = usePathname(); // Use usePathname for consistent path
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password';
 
   // Show full page loader if auth is loading and user is not on an auth page or the public homepage
-  // This prevents flashing the logged-out layout for authenticated users or the homepage content prematurely.
-  if (authLoading && !isAuthPage && path !== '/') {
+  if (authLoading && !isAuthPage && pathname !== '/') {
      return <Loading />;
   }
 
