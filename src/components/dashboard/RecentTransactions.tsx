@@ -1,6 +1,8 @@
 
 'use client';
 
+import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -16,11 +18,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { PlusCircle, ListChecks } from 'lucide-react';
+import { PlusCircle, ListChecks, Edit3, Trash2, MoreHorizontal } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 
 export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
-  const { transactions, loading } = useTransactions();
+  const { transactions, loading, deleteTransaction } = useTransactions();
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
   const recentTransactions = transactions.slice(0, maxItems);
 
@@ -29,7 +49,14 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
       return format(parseISO(dateStr), 'MMM dd, yyyy');
     } catch (e) {
       console.warn("Failed to parse date for formatting:", dateStr, e);
-      return dateStr; 
+      return dateStr;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (transactionToDelete) {
+      await deleteTransaction(transactionToDelete.id);
+      setTransactionToDelete(null); // Close dialog
     }
   };
 
@@ -37,16 +64,15 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
     <Card className="shadow-lg">
       <CardHeader>
         <div className="flex items-center justify-between">
-            <div>
-                <CardTitle className="flex items-center gap-2">
-                    <ListChecks className="h-6 w-6 text-primary"/>
-                    Recent Transactions
-                </CardTitle>
-                <CardDescription>
-                    Your last {loading || recentTransactions.length === 0 ? maxItems : recentTransactions.length} recorded transactions.
-                </CardDescription>
-            </div>
-            {/* Optional: Could add a "View All" button here if you create a full transactions page */}
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="h-6 w-6 text-primary"/>
+              Recent Transactions
+            </CardTitle>
+            <CardDescription>
+              Your last {loading || recentTransactions.length === 0 ? maxItems : recentTransactions.length} recorded transactions.
+            </CardDescription>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -58,7 +84,8 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
                 </div>
-                <Skeleton className="h-6 w-1/4" />
+                <Skeleton className="h-8 w-1/4" />
+                <Skeleton className="h-8 w-8" />
               </div>
             ))}
           </div>
@@ -85,6 +112,7 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
                   <TableHead className="min-w-[100px]">Category</TableHead>
                   <TableHead className="min-w-[80px]">Type</TableHead>
                   <TableHead className="text-right min-w-[100px]">Amount</TableHead>
+                  <TableHead className="text-center min-w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -98,13 +126,35 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
                         {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
                       </Badge>
                     </TableCell>
-                    <TableCell 
+                    <TableCell
                       className={`text-right font-semibold whitespace-nowrap ${
                         transaction.type === 'income' ? 'text-primary' : 'text-destructive'
                       }`}
                     >
                       {transaction.type === 'income' ? '+' : '-'}$
                       {transaction.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-center">
+                       <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/transactions/edit/${transaction.id}`} className="flex items-center w-full">
+                              <Edit3 className="mr-2 h-4 w-4" />
+                              Edit
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setTransactionToDelete(transaction)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -113,6 +163,26 @@ export function RecentTransactions({ maxItems = 5 }: { maxItems?: number }) {
           </div>
         )}
       </CardContent>
+
+      {transactionToDelete && (
+        <AlertDialog open={!!transactionToDelete} onOpenChange={() => setTransactionToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the transaction
+                 "{transactionToDelete.description}" amounting to ${transactionToDelete.amount.toFixed(2)}.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </Card>
   );
 }

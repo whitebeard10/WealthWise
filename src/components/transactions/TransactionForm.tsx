@@ -13,13 +13,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarIcon, Loader2, Wand2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTransactions } from '@/contexts/TransactionContext';
+import type { Transaction } from '@/lib/types';
 import { categorizeTransaction } from '@/ai/flows/categorize-transaction';
 import type { CategorizeTransactionOutput } from '@/ai/flows/categorize-transaction';
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
 
 const transactionSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -37,9 +39,15 @@ const defaultCategories = [
   "Investments", "Income", "Others"
 ];
 
-export function TransactionForm() {
-  const { addTransaction } = useTransactions();
+interface TransactionFormProps {
+  initialData?: Transaction | null; // Allow null for clarity if no data
+  isEditMode?: boolean;
+}
+
+export function TransactionForm({ initialData, isEditMode = false }: TransactionFormProps) {
+  const { addTransaction, updateTransaction } = useTransactions();
   const { toast } = useToast();
+  const router = useRouter();
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [suggestedCategory, setSuggestedCategory] = useState<CategorizeTransactionOutput | null>(null);
   const [availableCategories, setAvailableCategories] = useState<string[]>(defaultCategories);
@@ -47,24 +55,42 @@ export function TransactionForm() {
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
-      description: '',
-      amount: 0,
-      type: 'expense',
-      date: new Date(),
-      category: '',
+      description: initialData?.description || '',
+      amount: initialData?.amount || 0,
+      type: initialData?.type || 'expense',
+      date: initialData?.date ? parseISO(initialData.date) : new Date(),
+      category: initialData?.category || '',
     },
   });
+
+  useEffect(() => {
+    if (initialData) {
+      // Ensure date is a Date object for the form
+      const formDate = initialData.date ? parseISO(initialData.date) : new Date();
+      if (!isValid(formDate)) {
+        console.warn("Initial data had an invalid date string:", initialData.date);
+      }
+      form.reset({
+        ...initialData,
+        date: isValid(formDate) ? formDate : new Date(), // Fallback to new Date if parseISO fails
+      });
+      if (initialData.category && !availableCategories.includes(initialData.category)) {
+        setAvailableCategories(prev => [initialData.category!, ...prev.filter(c => c !== initialData.category)]);
+      }
+    }
+  }, [initialData, form, availableCategories]);
+
 
   const descriptionValue = form.watch('description');
 
   useEffect(() => {
     if (suggestedCategory?.category && !availableCategories.includes(suggestedCategory.category)) {
-      setAvailableCategories(prev => [...prev, suggestedCategory.category!]);
+      setAvailableCategories(prev => [suggestedCategory.category!, ...prev.filter(c => c !== suggestedCategory.category)]);
     }
-    if(suggestedCategory?.category) {
+    if(suggestedCategory?.category && !isEditMode) { // Only auto-set category if not editing or if explicitly requested
       form.setValue('category', suggestedCategory.category, { shouldValidate: true });
     }
-  }, [suggestedCategory, availableCategories, form]);
+  }, [suggestedCategory, availableCategories, form, isEditMode]);
 
   const handleCategorize = async () => {
     if (!descriptionValue) {
@@ -76,6 +102,10 @@ export function TransactionForm() {
     try {
       const result = await categorizeTransaction({ description: descriptionValue });
       setSuggestedCategory(result);
+      form.setValue('category', result.category, { shouldValidate: true }); // Auto-set category from AI
+      if (result.category && !availableCategories.includes(result.category)) {
+        setAvailableCategories(prev => [result.category!, ...prev.filter(c => c !== result.category)]);
+      }
       toast({ title: "AI Suggestion", description: `Suggested category: ${result.category} (Confidence: ${(result.confidence * 100).toFixed(0)}%)`, variant: "default" });
     } catch (error) {
       console.error('Error categorizing transaction:', error);
@@ -85,26 +115,22 @@ export function TransactionForm() {
     }
   };
   
-  const onSubmit = (data: TransactionFormData) => {
-    // The addTransaction function in context now expects a Date object or a full ISO string for 'date'
-    // It will handle formatting to 'yyyy-MM-dd' before saving.
-    addTransaction({
-      description: data.description,
-      amount: data.amount,
-      type: data.type,
-      date: data.date, // Pass the Date object directly
-      category: data.category,
-    });
-    // Toast is now handled within addTransaction context function
-    form.reset();
+  const onSubmit = async (data: TransactionFormData) => {
+    if (isEditMode && initialData?.id) {
+      await updateTransaction(initialData.id, data);
+    } else {
+      await addTransaction(data);
+    }
+    // Navigation is now handled within addTransaction/updateTransaction in context
+    // form.reset(); // Resetting form might be disruptive if navigation occurs
     setSuggestedCategory(null);
   };
 
   return (
     <Card className="w-full max-w-2xl mx-auto shadow-xl">
       <CardHeader>
-        <CardTitle className="text-2xl">Add New Transaction</CardTitle>
-        <CardDescription>Log your income and expenses manually.</CardDescription>
+        <CardTitle className="text-2xl">{isEditMode ? 'Edit Transaction' : 'Add New Transaction'}</CardTitle>
+        <CardDescription>{isEditMode ? 'Update the details of your transaction.' : 'Log your income and expenses manually.'}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -135,7 +161,7 @@ export function TransactionForm() {
               control={form.control}
               name="type"
               render={({ field }) => (
-                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
+                <RadioGroup onValueChange={field.onChange} value={field.value} defaultValue={field.value} className="flex space-x-4">
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="income" id="income" />
                     <Label htmlFor="income">Income</Label>
@@ -174,8 +200,9 @@ export function TransactionForm() {
                             <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => field.onChange(date)}
                                 initialFocus
+                                disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                             />
                         </PopoverContent>
                     </Popover>
@@ -197,7 +224,7 @@ export function TransactionForm() {
                   </SelectTrigger>
                   <SelectContent>
                     {availableCategories.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}>{cat}</SelectItem>
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -213,12 +240,10 @@ export function TransactionForm() {
           
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Add Transaction
+            {isEditMode ? 'Update Transaction' : 'Add Transaction'}
           </Button>
         </form>
       </CardContent>
     </Card>
   );
 }
-
-    
