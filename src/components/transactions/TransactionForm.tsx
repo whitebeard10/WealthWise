@@ -40,7 +40,7 @@ const defaultCategories = [
 ];
 
 interface TransactionFormProps {
-  initialData?: Transaction | null; // Allow null for clarity if no data
+  initialData?: Transaction | null;
   isEditMode?: boolean;
 }
 
@@ -58,39 +58,57 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
       description: initialData?.description || '',
       amount: initialData?.amount || 0,
       type: initialData?.type || 'expense',
-      date: initialData?.date ? parseISO(initialData.date) : new Date(),
+      date: initialData?.date ? (isValid(parseISO(initialData.date)) ? parseISO(initialData.date) : new Date()) : new Date(),
       category: initialData?.category || '',
     },
   });
 
   useEffect(() => {
     if (initialData) {
-      // Ensure date is a Date object for the form
       const formDate = initialData.date ? parseISO(initialData.date) : new Date();
       if (!isValid(formDate)) {
         console.warn("Initial data had an invalid date string:", initialData.date);
       }
       form.reset({
         ...initialData,
-        date: isValid(formDate) ? formDate : new Date(), // Fallback to new Date if parseISO fails
+        date: isValid(formDate) ? formDate : new Date(),
       });
-      if (initialData.category && !availableCategories.includes(initialData.category)) {
-        setAvailableCategories(prev => [initialData.category!, ...prev.filter(c => c !== initialData.category)]);
+      if (initialData.category && !defaultCategories.includes(initialData.category)) {
+        setAvailableCategories(prev => {
+          if (prev.includes(initialData.category!)) return prev;
+          // Add to beginning for better visibility if it's the current category
+          return [initialData.category!, ...prev.filter(c => c !== initialData.category!)];
+        });
       }
+    } else {
+        // Reset to defaults if no initialData (e.g., navigating from edit to add)
+        form.reset({
+            description: '',
+            amount: 0,
+            type: 'expense',
+            date: new Date(),
+            category: '',
+        });
+        setAvailableCategories(defaultCategories); // Reset categories to default
     }
-  }, [initialData, form, availableCategories]);
+  }, [initialData, form]);
 
 
   const descriptionValue = form.watch('description');
 
   useEffect(() => {
-    if (suggestedCategory?.category && !availableCategories.includes(suggestedCategory.category)) {
-      setAvailableCategories(prev => [suggestedCategory.category!, ...prev.filter(c => c !== suggestedCategory.category)]);
+    if (suggestedCategory?.category) {
+      const newCategory = suggestedCategory.category;
+      setAvailableCategories(prev => {
+        if (prev.includes(newCategory)) return prev;
+        return [newCategory, ...prev.filter(c => c !== newCategory)];
+      });
+      // Only auto-set category if not editing, or if editing but category is not yet set from initialData
+      if (!isEditMode || (isEditMode && !form.getValues('category'))) {
+        form.setValue('category', newCategory, { shouldValidate: true });
+      }
     }
-    if(suggestedCategory?.category && !isEditMode) { // Only auto-set category if not editing or if explicitly requested
-      form.setValue('category', suggestedCategory.category, { shouldValidate: true });
-    }
-  }, [suggestedCategory, availableCategories, form, isEditMode]);
+  }, [suggestedCategory, form, isEditMode]);
 
   const handleCategorize = async () => {
     if (!descriptionValue) {
@@ -101,11 +119,8 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
     setSuggestedCategory(null);
     try {
       const result = await categorizeTransaction({ description: descriptionValue });
-      setSuggestedCategory(result);
-      form.setValue('category', result.category, { shouldValidate: true }); // Auto-set category from AI
-      if (result.category && !availableCategories.includes(result.category)) {
-        setAvailableCategories(prev => [result.category!, ...prev.filter(c => c !== result.category)]);
-      }
+      setSuggestedCategory(result); // This will trigger the useEffect above
+      // form.setValue('category', result.category, { shouldValidate: true }); // Now handled in useEffect
       toast({ title: "AI Suggestion", description: `Suggested category: ${result.category} (Confidence: ${(result.confidence * 100).toFixed(0)}%)`, variant: "default" });
     } catch (error) {
       console.error('Error categorizing transaction:', error);
@@ -121,8 +136,6 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
     } else {
       await addTransaction(data);
     }
-    // Navigation is now handled within addTransaction/updateTransaction in context
-    // form.reset(); // Resetting form might be disruptive if navigation occurs
     setSuggestedCategory(null);
   };
 
@@ -247,3 +260,5 @@ export function TransactionForm({ initialData, isEditMode = false }: Transaction
     </Card>
   );
 }
+
+    
