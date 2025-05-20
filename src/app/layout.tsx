@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Toaster } from "@/components/ui/toaster";
 import { TransactionProvider } from '@/contexts/TransactionContext';
 import { AuthProvider } from '@/contexts/AuthContext'; // Import AuthProvider
+import { BudgetProvider } from '@/contexts/BudgetContext'; // Import BudgetProvider
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,11 +31,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthProvider> {/* Wrap with AuthProvider */}
+        <AuthProvider>
           <TransactionProvider>
-            <AppLayout>
-              {children}
-            </AppLayout>
+            <BudgetProvider> {/* Wrap with BudgetProvider */}
+              <AppLayout>
+                {children}
+              </AppLayout>
+            </BudgetProvider>
           </TransactionProvider>
         </AuthProvider>
         <Toaster />

@@ -23,3 +23,16 @@ export interface SpendingByCategory {
   amount: number;
   fill?: string; // For chart color
 }
+
+export interface Budget {
+  id: string; // Firestore document ID
+  userId: string;
+  category: string;
+  allocatedAmount: number;
+  month: string; // Format "YYYY-MM", e.g., "2024-07"
+}
+
+// For form data, ID might be optional if creating new
+export type BudgetFormData = Omit<Budget, 'id' | 'userId'> & {
+  id?: string;
+};
