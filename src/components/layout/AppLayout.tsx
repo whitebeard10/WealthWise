@@ -16,6 +16,7 @@ import { SidebarNav } from './SidebarNav';
 import { Leaf } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemeToggle } from './ThemeToggle'; // Import ThemeToggle
 import Loading from '@/app/loading'; // Ensure Loading component is imported
 
 interface AppLayoutProps {
@@ -49,8 +50,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           <SidebarContent>
             <SidebarNav />
           </SidebarContent>
-          <SidebarFooter className="p-4 mt-auto">
-            {/* Example: Theme switcher or other global actions could go here */}
+          <SidebarFooter className="p-4 mt-auto flex justify-center items-center border-t border-sidebar-border">
+            <ThemeToggle />
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
