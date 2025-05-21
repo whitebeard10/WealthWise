@@ -130,7 +130,7 @@ WealthWise/
 
 For further understanding of the project or collaboration inquiries, please reach out:
 
-- **[Your Name/Alias]**
+- **[Avinash Chhetri]**
 - **Email:** [Mail here](mailto:avinash0chhetri@gmail.com)
 - **GitHub:** [Whitebeard10](https://github.com/whitebeard10)
 - **(Optional) LinkedIn/Portfolio:** [Avinash Chhetri](https://www.linkedin.com/in/avinash-chhetri/)
