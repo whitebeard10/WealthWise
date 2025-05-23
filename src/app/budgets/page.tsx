@@ -1,5 +1,5 @@
 
-'use client';
+'use client'; // Enables Client Component mode for Next.js
 
 import React, { useState } from 'react';
 import { useBudgets } from '@/contexts/BudgetContext';
